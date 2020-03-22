@@ -34,6 +34,8 @@ impl SocketsContainer {
 
 pub struct App<'a> {
     pub sockets_info_res: Result<SocketsContainer, ConnectionToolsError>,
+    pub tcp_sockets_count: usize,
+    pub udp_sockets_count: usize,
     pub items: Vec<&'a str>,
     pub selected: Option<usize>,
     pub events: Vec<(&'a str, &'a str)>,
@@ -47,6 +49,8 @@ impl<'a> App<'a> {
     pub fn new() -> App<'a> {
         App {
             sockets_info_res: Result::Ok(SocketsContainer::new()),
+            tcp_sockets_count: 0,
+            udp_sockets_count: 0,
             items: vec![
                 "Item1", "Item2", "Item3", "Item4", "Item5", "Item6", "Item7", "Item8", "Item9",
                 "Item10", "Item11", "Item12", "Item13", "Item14", "Item15", "Item16", "Item17",
@@ -101,8 +105,18 @@ impl<'a> App<'a> {
                 message: format!("{}", err),
             }
         });
-        let tcp_and_upd_sockets = sockets_info.map(|sockets| split_sockets(sockets));
+        let tcp_and_upd_sockets = sockets_info.map(split_sockets);
         self.sockets_info_res = tcp_and_upd_sockets;
+        self.tcp_sockets_count = self
+            .sockets_info_res
+            .as_ref()
+            .map(|sockets_container| sockets_container.tcp_sockets.len())
+            .unwrap_or(0);
+        self.udp_sockets_count = self
+            .sockets_info_res
+            .as_ref()
+            .map(|sockets_container| sockets_container.udp_sockets.len())
+            .unwrap_or(0);
     }
 }
 

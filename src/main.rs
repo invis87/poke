@@ -57,16 +57,22 @@ fn main() -> Result<(), failure::Error> {
 
                 match app.sockets_info_res.as_ref() {
                     Ok(sockets_container) => {
+                        let sockets_info_layout = Layout::default()
+                            .direction(Direction::Vertical)
+                            .margin(1)
+                            .constraints([Constraint::Percentage(90), Constraint::Min(2)].as_ref())
+                            .split(sockets_chunk);
+
                         let socket_connections_layout = Layout::default()
                             .direction(Direction::Horizontal)
-                            .margin(1)
                             .constraints(
                                 [Constraint::Percentage(50), Constraint::Percentage(50)].as_ref(),
                             )
-                            .split(sockets_chunk);
+                            .split(sockets_info_layout[0]);
 
                         let tcp_sockets_layout = socket_connections_layout[0];
                         let udp_sockets_layout = socket_connections_layout[1];
+                        let text_socket_info_layout = sockets_info_layout[1];
 
                         let tcp_sockets_str = sockets_container
                             .tcp_sockets
@@ -103,6 +109,12 @@ fn main() -> Result<(), failure::Error> {
                             )
                             .highlight_symbol(">")
                             .render(&mut f, udp_sockets_layout);
+
+                        let text = [Text::raw(format!(
+                            "TCP count: {}; UDP count: {}",
+                            app.tcp_sockets_count, app.udp_sockets_count
+                        ))];
+                        Paragraph::new(text.iter()).render(&mut f, text_socket_info_layout);
                     }
 
                     Err(error) => {
