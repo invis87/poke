@@ -39,7 +39,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         SelectableList::default()
             .block(Block::default().title("TCP").borders(Borders::ALL))
             .items(&app.tcp_sockets)
-            .select(app.selected)
+            .select(Some(app.selected_tcp))
             .highlight_style(
                 Style::default()
                     .fg(Color::LightGreen)
@@ -51,7 +51,7 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         SelectableList::default()
             .block(Block::default().title("UDP").borders(Borders::ALL))
             .items(&app.udp_sockets)
-            .select(app.selected)
+            .select(Some(app.selected_udp))
             .highlight_style(
                 Style::default()
                     .fg(Color::LightGreen)
@@ -61,8 +61,8 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             .render(f, udp_sockets_layout);
 
         let text = [Text::raw(format!(
-            "TCP count: {}; UDP count: {}",
-            app.tcp_sockets_count, app.udp_sockets_count
+            "TCP count: {}; UDP count: {}; <debug> current selection: {:?}",
+            app.tcp_sockets_count, app.udp_sockets_count, app.selected_type
         ))];
         Paragraph::new(text.iter()).render(f, text_socket_info_layout);
 

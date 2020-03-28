@@ -11,6 +11,30 @@ pub struct SocketsContainer {
     pub udp_sockets: Vec<(UdpSocketInfo, Vec<u32>)>,
 }
 
+#[derive(Debug)]
+pub enum SelectedType {
+    Nothing,
+    Tcp,
+    Udp,
+}
+impl SelectedType {
+    fn left(&self) -> Self {
+        match &self {
+            SelectedType::Nothing => SelectedType::Nothing,
+            SelectedType::Tcp => SelectedType::Nothing,
+            SelectedType::Udp => SelectedType::Tcp,
+        }
+    }
+
+    fn right(&self) -> Self {
+        match &self {
+            SelectedType::Nothing => SelectedType::Tcp,
+            SelectedType::Tcp => SelectedType::Udp,
+            SelectedType::Udp => SelectedType::Udp,
+        }
+    }
+}
+
 impl SocketsContainer {
     pub fn new() -> Self {
         SocketsContainer {
@@ -27,7 +51,9 @@ pub struct App<'a> {
     pub tcp_sockets_count: usize,
     pub udp_sockets_count: usize,
     pub items: Vec<&'a str>,
-    pub selected: Option<usize>,
+    pub selected_type: SelectedType,
+    pub selected_tcp: usize,
+    pub selected_udp: usize,
     pub events: Vec<(&'a str, &'a str)>,
     pub info_style: Style,
     pub warning_style: Style,
@@ -49,35 +75,10 @@ impl<'a> App<'a> {
                 "Item10", "Item11", "Item12", "Item13", "Item14", "Item15", "Item16", "Item17",
                 "Item18", "Item19", "Item20", "Item21", "Item22", "Item23", "Item24",
             ],
-            selected: None,
-            events: vec![
-                ("Event1", "INFO"),
-                ("Event2", "INFO"),
-                ("Event3", "CRITICAL"),
-                ("Event4", "ERROR"),
-                ("Event5", "INFO"),
-                ("Event6", "INFO"),
-                ("Event7", "WARNING"),
-                ("Event8", "INFO"),
-                ("Event9", "INFO"),
-                ("Event10", "INFO"),
-                ("Event11", "CRITICAL"),
-                ("Event12", "INFO"),
-                ("Event13", "INFO"),
-                ("Event14", "INFO"),
-                ("Event15", "INFO"),
-                ("Event16", "INFO"),
-                ("Event17", "ERROR"),
-                ("Event18", "ERROR"),
-                ("Event19", "INFO"),
-                ("Event20", "INFO"),
-                ("Event21", "WARNING"),
-                ("Event22", "INFO"),
-                ("Event23", "INFO"),
-                ("Event24", "WARNING"),
-                ("Event25", "INFO"),
-                ("Event26", "INFO"),
-            ],
+            selected_type: SelectedType::Nothing,
+            selected_tcp: 0,
+            selected_udp: 0,
+            events: vec![("Event1", "INFO"), ("Event2", "INFO"), ("Event26", "INFO")],
             info_style: Style::default().fg(Color::White),
             warning_style: Style::default().fg(Color::Yellow),
             error_style: Style::default().fg(Color::Magenta),
@@ -138,33 +139,35 @@ impl<'a> App<'a> {
     }
 
     pub fn on_up(&mut self) {
-        self.selected = if let Some(selected) = self.selected {
-            if selected > 0 {
-                Some(selected - 1)
-            } else {
-                Some(self.items.len() - 1)
+        match self.selected_type {
+            SelectedType::Nothing => (),
+            SelectedType::Tcp => {
+                self.selected_tcp = up_select_counter(&self.selected_tcp, &self.tcp_sockets_count)
             }
-        } else {
-            Some(0)
+            SelectedType::Udp => {
+                self.selected_udp = up_select_counter(&self.selected_udp, &self.udp_sockets_count)
+            }
         }
     }
 
     pub fn on_down(&mut self) {
-        self.selected = if let Some(selected) = self.selected {
-            if selected >= self.items.len() - 1 {
-                Some(0)
-            } else {
-                Some(selected + 1)
+        match self.selected_type {
+            SelectedType::Nothing => (),
+            SelectedType::Tcp => {
+                self.selected_tcp = down_select_counter(&self.selected_tcp, &self.tcp_sockets_count)
             }
-        } else {
-            Some(0)
+            SelectedType::Udp => {
+                self.selected_udp = down_select_counter(&self.selected_udp, &self.udp_sockets_count)
+            }
         }
     }
 
-    pub fn on_right(&mut self) {}
+    pub fn on_right(&mut self) {
+        self.selected_type = self.selected_type.right();
+    }
 
     pub fn on_left(&mut self) {
-        self.selected = None;
+        self.selected_type = self.selected_type.left();
     }
 
     pub fn on_key(&mut self, c: char) {
@@ -233,4 +236,20 @@ fn udp_socket_to_string(udp_si: &UdpSocketInfo, associated_pids: &[u32]) -> Stri
         "UDP local[{} : {}] -> *:* pids{:?}",
         udp_si.local_addr, udp_si.local_port, associated_pids
     )
+}
+
+fn up_select_counter(current: &usize, base_collection_len: &usize) -> usize {
+    if *current > 0 {
+        current - 1
+    } else {
+        base_collection_len - 1
+    }
+}
+
+fn down_select_counter(current: &usize, base_collection_len: &usize) -> usize {
+    if *current >= base_collection_len - 1 {
+        0
+    } else {
+        current + 1
+    }
 }
