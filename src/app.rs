@@ -5,6 +5,7 @@ use netstat2::{
     get_sockets_info, AddressFamilyFlags, ProtocolFlags, ProtocolSocketInfo, SocketInfo,
     TcpSocketInfo, UdpSocketInfo,
 };
+use sysinfo::{ProcessExt, SystemExt};
 
 pub struct SocketsContainer {
     pub tcp_sockets: Vec<(TcpSocketInfo, Vec<u32>)>,
@@ -17,6 +18,7 @@ pub enum SelectedType {
     Tcp,
     Udp,
 }
+
 impl SelectedType {
     fn left(&self) -> Self {
         match &self {
@@ -44,17 +46,15 @@ impl SocketsContainer {
     }
 }
 
-pub struct App<'a> {
+pub struct App {
     sockets_info_res: Result<SocketsContainer, ConnectionToolsError>,
     pub tcp_sockets: Vec<String>,
     pub udp_sockets: Vec<String>,
     pub tcp_sockets_count: usize,
     pub udp_sockets_count: usize,
-    pub items: Vec<&'a str>,
     pub selected_type: SelectedType,
-    pub selected_tcp: usize,
-    pub selected_udp: usize,
-    pub events: Vec<(&'a str, &'a str)>,
+    tcp_selection: Option<usize>,
+    udp_selection: Option<usize>,
     pub info_style: Style,
     pub warning_style: Style,
     pub error_style: Style,
@@ -62,34 +62,23 @@ pub struct App<'a> {
     pub should_quit: bool,
 }
 
-impl<'a> App<'a> {
-    pub fn new() -> App<'a> {
+impl App {
+    pub fn new() -> App {
         App {
             sockets_info_res: Result::Ok(SocketsContainer::new()),
             tcp_sockets: Vec::new(),
             udp_sockets: Vec::new(),
             tcp_sockets_count: 0,
             udp_sockets_count: 0,
-            items: vec![
-                "Item1", "Item2", "Item3", "Item4", "Item5", "Item6", "Item7", "Item8", "Item9",
-                "Item10", "Item11", "Item12", "Item13", "Item14", "Item15", "Item16", "Item17",
-                "Item18", "Item19", "Item20", "Item21", "Item22", "Item23", "Item24",
-            ],
             selected_type: SelectedType::Nothing,
-            selected_tcp: 0,
-            selected_udp: 0,
-            events: vec![("Event1", "INFO"), ("Event2", "INFO"), ("Event26", "INFO")],
+            tcp_selection: None,
+            udp_selection: None,
             info_style: Style::default().fg(Color::White),
             warning_style: Style::default().fg(Color::Yellow),
             error_style: Style::default().fg(Color::Magenta),
             critical_style: Style::default().fg(Color::Red),
             should_quit: false,
         }
-    }
-
-    fn advance(&mut self) {
-        let event = self.events.pop().unwrap();
-        self.events.insert(0, event);
     }
 
     pub fn update_sockets(&mut self) {
@@ -142,10 +131,10 @@ impl<'a> App<'a> {
         match self.selected_type {
             SelectedType::Nothing => (),
             SelectedType::Tcp => {
-                self.selected_tcp = up_select_counter(&self.selected_tcp, &self.tcp_sockets_count)
+                self.tcp_selection = up_select_counter(&self.tcp_selection, &self.tcp_sockets_count)
             }
             SelectedType::Udp => {
-                self.selected_udp = up_select_counter(&self.selected_udp, &self.udp_sockets_count)
+                self.udp_selection = up_select_counter(&self.udp_selection, &self.udp_sockets_count)
             }
         }
     }
@@ -154,11 +143,29 @@ impl<'a> App<'a> {
         match self.selected_type {
             SelectedType::Nothing => (),
             SelectedType::Tcp => {
-                self.selected_tcp = down_select_counter(&self.selected_tcp, &self.tcp_sockets_count)
+                self.tcp_selection =
+                    down_select_counter(&self.tcp_selection, &self.tcp_sockets_count)
             }
             SelectedType::Udp => {
-                self.selected_udp = down_select_counter(&self.selected_udp, &self.udp_sockets_count)
+                self.udp_selection =
+                    down_select_counter(&self.udp_selection, &self.udp_sockets_count)
             }
+        }
+    }
+
+    pub fn selected_tcp(&self) -> Option<usize> {
+        match self.selected_type {
+            SelectedType::Udp => None,
+            SelectedType::Nothing => None,
+            SelectedType::Tcp => self.tcp_selection,
+        }
+    }
+
+    pub fn selected_udp(&self) -> Option<usize> {
+        match self.selected_type {
+            SelectedType::Nothing => None,
+            SelectedType::Tcp => None,
+            SelectedType::Udp => self.udp_selection,
         }
     }
 
@@ -180,8 +187,54 @@ impl<'a> App<'a> {
     }
 
     pub fn on_tick(&mut self) {
-        //                self.advance();
         self.update_sockets();
+    }
+
+    pub fn selected_socket_info(&self) -> String {
+        match self.selected_type {
+            SelectedType::Nothing => "choose socket with arrow keys".to_owned(),
+            SelectedType::Tcp => match &self.sockets_info_res {
+                Err(_) => "fail to get sockets info".to_owned(),
+                Ok(sockets_info) => {
+                    let selected_socket =
+                        &sockets_info.tcp_sockets[self.tcp_selection.unwrap_or(0)];
+                    let pids = &selected_socket.1;
+
+                    //todo: move systemInfo outside
+                    let mut system = sysinfo::System::new_all();
+
+                    // First we update all information of our system struct.
+                    system.refresh_all();
+
+                    // Now let's print every process' id and name:
+                    let pids_info = pids
+                        .iter()
+                        .map(|&pid| {
+                            system
+                                .get_process(pid as i32)
+                                .map(|proc_| {
+                                    format!(
+                                        "pid {}::\nname {}\nstatus: {:?}\ncmd: {:?}\nexe: {:?}\nenviron: {:?}\nmemory: {}\nvirtual memory: {}\nstart time: {}\ncpu usage: {}",
+                                        pid,
+                                        proc_.name(),
+                                        proc_.status(),
+                                        proc_.cmd(),
+                                        proc_.exe(),
+                                        proc_.environ(),
+                                        proc_.memory(),
+                                        proc_.virtual_memory(),
+                                        proc_.start_time(),
+                                        proc_.cpu_usage(),
+                                    )
+                                })
+                                .unwrap_or("todo: fix me".to_owned())
+                        })
+                        .collect();
+                    pids_info
+                }
+            },
+            SelectedType::Udp => "todo: implement in the same way as for TCP".to_owned(),
+        }
     }
 }
 
@@ -221,7 +274,7 @@ fn split_sockets(sockets_info: Vec<SocketInfo>) -> SocketsContainer {
 
 fn tcp_socket_to_string(tcp_si: &TcpSocketInfo, associated_pids: &[u32]) -> String {
     format!(
-        "TCP local[{} : {}] -> remote [{} : {}]; pids{:?}; state: {}",
+        "local[{} : {}] -> remote [{} : {}]; pids{:?}; state: {}",
         tcp_si.local_addr,
         tcp_si.local_port,
         tcp_si.remote_addr,
@@ -233,23 +286,31 @@ fn tcp_socket_to_string(tcp_si: &TcpSocketInfo, associated_pids: &[u32]) -> Stri
 
 fn udp_socket_to_string(udp_si: &UdpSocketInfo, associated_pids: &[u32]) -> String {
     format!(
-        "UDP local[{} : {}] -> *:* pids{:?}",
+        "local[{} : {}] -> *:* pids{:?}",
         udp_si.local_addr, udp_si.local_port, associated_pids
     )
 }
 
-fn up_select_counter(current: &usize, base_collection_len: &usize) -> usize {
-    if *current > 0 {
-        current - 1
+fn up_select_counter(current: &Option<usize>, base_collection_len: &usize) -> Option<usize> {
+    if let Some(current) = current.as_ref() {
+        if *current > 0 {
+            Some(*current - 1)
+        } else {
+            Some(*base_collection_len - 1)
+        }
     } else {
-        base_collection_len - 1
+        Some(0)
     }
 }
 
-fn down_select_counter(current: &usize, base_collection_len: &usize) -> usize {
-    if *current >= base_collection_len - 1 {
-        0
+fn down_select_counter(current: &Option<usize>, base_collection_len: &usize) -> Option<usize> {
+    if let Some(current) = current.as_ref() {
+        if *current >= *base_collection_len - 1 {
+            Some(0)
+        } else {
+            Some(*current + 1)
+        }
     } else {
-        current + 1
+        Some(0)
     }
 }

@@ -2,7 +2,7 @@ use tui::backend::Backend;
 use tui::layout::Corner;
 use tui::layout::{Alignment, Constraint, Direction, Layout};
 use tui::style::{Color, Modifier, Style};
-use tui::widgets::{Block, Borders, List, Paragraph, SelectableList, Text, Widget};
+use tui::widgets::{Block, Borders, List, Paragraph, SelectableList, Table, Text, Widget};
 use tui::Frame;
 
 use crate::app::App;
@@ -37,9 +37,14 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
         let text_socket_info_layout = sockets_info_layout[1];
 
         SelectableList::default()
-            .block(Block::default().title("TCP").borders(Borders::ALL))
+            .block(
+                Block::default()
+                    .title("TCP")
+                    .title_style(Style::default().fg(Color::Magenta).modifier(Modifier::BOLD))
+                    .borders(Borders::ALL),
+            )
             .items(&app.tcp_sockets)
-            .select(Some(app.selected_tcp))
+            .select(app.selected_tcp())
             .highlight_style(
                 Style::default()
                     .fg(Color::LightGreen)
@@ -49,12 +54,17 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
             .render(f, tcp_sockets_layout);
 
         SelectableList::default()
-            .block(Block::default().title("UDP").borders(Borders::ALL))
+            .block(
+                Block::default()
+                    .title("UDP")
+                    .title_style(Style::default().fg(Color::Magenta).modifier(Modifier::BOLD))
+                    .borders(Borders::ALL),
+            )
             .items(&app.udp_sockets)
-            .select(Some(app.selected_udp))
+            .select(app.selected_udp())
             .highlight_style(
                 Style::default()
-                    .fg(Color::LightGreen)
+                    .fg(Color::LightYellow)
                     .modifier(Modifier::BOLD),
             )
             .highlight_symbol(">")
@@ -88,21 +98,19 @@ pub fn draw<B: Backend>(f: &mut Frame<B>, app: &mut App) {
     }
 
     {
-        let events = app.events.iter().map(|&(evt, level)| {
-            Text::styled(
-                format!("{}: {}", level, evt),
-                match level {
-                    "ERROR" => app.error_style,
-                    "CRITICAL" => app.critical_style,
-                    "WARNING" => app.warning_style,
-                    _ => app.info_style,
-                },
-            )
-        });
+        let text = [Text::styled(
+            app.selected_socket_info(),
+            Style::default().fg(Color::White),
+        )];
 
-        List::new(events)
-            .block(Block::default().borders(Borders::ALL).title("List"))
-            .start_corner(Corner::BottomLeft)
+        Paragraph::new(text.iter())
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .title("Socket info")
+                    .title_style(Style::default().fg(Color::Magenta).modifier(Modifier::BOLD)),
+            )
+            .wrap(true)
             .render(f, main_chunks[1]);
     }
 }

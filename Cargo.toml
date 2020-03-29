@@ -10,5 +10,5 @@ edition = "2018"
 netstat2 = "0.8"
 tui = {version = "0.8.0", features = ["termion"]}
 termion = "1.5.5"
-failure= "0.1.7"
-
+failure = "0.1.7"
+sysinfo = "0.12.0"
